@@ -1328,7 +1328,7 @@ function shortestPath(graph, startNode) {
 
 
 let inputMap = document.getElementById('inputMap')
-for (let name of stop_name.sort()) {
+for (let name of [...stop_name].sort()) {
     let o = document.createElement('option')
     o.value = name
     o.innerText = name
