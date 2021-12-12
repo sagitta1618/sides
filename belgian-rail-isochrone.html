@@ -26,7 +26,6 @@
             <select class="custom-select" id="inputMap">
             </select>
         </div>
-        <p id="computing"></p>
         <div id='figMap'></div>
         <footer>v0.1.0 made using <a href="https://pyodide.org/">pyodide</a></a></footer>
     </div>
@@ -67,11 +66,12 @@ db = 'data/rail/gtfs-nmbs-2021-11-19/stops.txt'
 response = await fetch(db)
 js_buffer = await response.arrayBuffer()
 dfstops = pd.read_csv(BytesIO(js_buffer.to_py()))
-stop_names = dfstops['stop_name'].unique().tolist()
+stop_names = np.sort(dfstops['stop_name'].unique()).tolist()
 
 # computing average
 dftime['stop1'] = dftime['stop1'].astype(str)
 dftime['stop2'] = dftime['stop2'].astype(str)
+dftime.loc[:, ['stop1', 'stop2']] = np.sort(dftime[['stop1', 'stop2']].values, axis=1)
 dftime['weight'] = 200 - dftime['time']  # to optimize for the shortest path
 dfg = dftime.groupby(['stop1', 'stop2'])
 dfedge = dfg.mean().reset_index()
@@ -143,7 +143,6 @@ import plotly.express as px
             }
             
             function featmapFunc() {
-                document.getElementById('computing').innerText = 'Computing...'
                 console.log('featmap value', featmap.value)
                 variables['stopA'] = featmap.value
                 pyodide.runPython(`
@@ -153,25 +152,17 @@ from variables import stopA
 stop_idA = dfstops[dfstops['stop_name'].eq(stopA) & dfstops['location_type'].eq(1)]['stop_id'].values[0]
 other_stop_ids = dfstops[dfstops['stop_id'].ne(stop_idA)]['stop_id']
 
-# compute the time from all (or a subselection) of stations
-stops = []
-times = []
-errors = []
-for stop_id in other_stop_ids:
-    try:
-        travelTime = nx.shortest_path_length(G, stop_idA[1:], stop_id[1:], weight='time')
-        stops.append(stop_id[1:])
-        times.append(travelTime)
-    except Exception as e:
-        errors.append(e)
+# compute time from node A to all other nodes
+travelTimes = nx.shortest_path_length(G, stop_idA[1:], weight='time')
+
 dfiso = pd.DataFrame()
-dfiso['stop_id'] = stops
-dfiso['travel_time'] = np.round(times, 0)
+dfiso['stop_id'] = travelTimes.keys()
+dfiso['travel_time'] = np.round(list(travelTimes.values()), 0)
 dfiso['stopA'] = stop_idA[1:]
 dfiso = dfiso.merge(dfstops, how='left')
 
 px.set_mapbox_access_token('pk.eyJ1Ijoic2FnaXR0YTE2MTgiLCJhIjoiY2t4MHh6cjZvMDZxODJ2cnpzbGwzN2hqaCJ9.SqrherbackzNotZqAlFA6Q')
-fig = px.scatter_mapbox(dfiso, 'stop_lat', 'stop_lon', color='travel_time', zoom=6)
+fig = px.scatter_mapbox(dfiso, 'stop_lat', 'stop_lon', color='travel_time', text='stop_name', zoom=6)
 figMap = fig.to_html(include_plotlyjs=False, full_html=False)
 `)
                 let output = pyodide.globals.get('figMap')
@@ -180,7 +171,6 @@ figMap = fig.to_html(include_plotlyjs=False, full_html=False)
                 figMap.innerHTML = output // set the code but does not run it
                 setInnerHTML(figMap, output) // run the scripts tags
                 document.documentElement.scrollTo(0, a) // restore scroll
-                document.getElementById('computing').innerText = 'Computing...done'
             }
             featmap.addEventListener('change', featmapFunc)
 
