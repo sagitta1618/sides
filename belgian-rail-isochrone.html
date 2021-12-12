@@ -39,14 +39,14 @@
         async function main() {
 
             pyodide = await loadPyodide({ indexURL : "https://cdn.jsdelivr.net/pyodide/v0.18.1/full/" })
-            await pyodide.loadPackage(['numpy', 'pandas', 'micropip'])//, 'matplotlib'])
+            await pyodide.loadPackage(['pandas', 'micropip'])//, 'matplotlib'])
             status.innerText += 'loading database (2/3)...'
             await pyodide.runPythonAsync(`
 import pyodide
 from io import BytesIO
 from js import fetch
 import pandas as pd
-import numpy as np
+#import numpy as np
 import micropip
 
 # import networkx
@@ -57,6 +57,21 @@ import networkx as nx
 figMap = ''
 
 # load databases
+import json
+graphFile = 'data/rail/graph.json'
+response = await fetch(graphFile)
+js_buffer = await response.arrayBuffer()
+dic = json.load(BytesIO(js_buffer.to_py()))
+G = nx.readwrite.json_graph.node_link_graph(dic)
+print('graph data', G.number_of_edges(), G.number_of_nodes())
+
+db = 'data/rail/gtfs-nmbs-2021-11-19/stops.txt'
+response = await fetch(db)
+js_buffer = await response.arrayBuffer()
+dfstops = pd.read_csv(BytesIO(js_buffer.to_py()))
+stop_names = dfstops['stop_name'].sort_values().unique().tolist()
+`)
+/*
 db = 'data/rail/dftime-gtfs-nmbs-2021-11-19.csv'
 response = await fetch(db)
 js_buffer = await response.arrayBuffer()
@@ -99,6 +114,7 @@ for i in range(dfedge.shape[0]):
 
 pos = dict(zip(nodes, nodesLoc))  # position from lat/lon
 `)
+*/
             status.innerText += 'loading plotly (3/3)...'
             
             await pyodide.runPythonAsync(`
@@ -157,7 +173,7 @@ travelTimes = nx.shortest_path_length(G, stop_idA[1:], weight='time')
 
 dfiso = pd.DataFrame()
 dfiso['stop_id'] = travelTimes.keys()
-dfiso['travel_time'] = np.round(list(travelTimes.values()), 0)
+dfiso['travel_time'] = pd.Series(list(travelTimes.values())).round(0).astype(int)
 dfiso['stopA'] = stop_idA[1:]
 dfiso = dfiso.merge(dfstops, how='left')
 
